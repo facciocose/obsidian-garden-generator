@@ -5,10 +5,17 @@ description = "Python script to create a digital garden using an Obsidian vault 
 authors = ["Luca <ldm.marra@gmail.com>"]
 license = "MIT"
 
+[tool.poetry.scripts]
+obgage = "obsidian_garden_generator.obgage:run"
+
 [tool.poetry.dependencies]
 python = "^3.10"
+Markdown = "^3.3.6"
+python-slugify = "^6.1.2"
+Jinja2 = "^3.1.1"
 
 [tool.poetry.dev-dependencies]
+black = {version = "^22.3.0", allow-prereleases = true}
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
