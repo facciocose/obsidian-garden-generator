@@ -2,11 +2,11 @@
 name = "obsidian-garden-generator"
 version = "2022.04.26"
 description = "Python script to create a digital garden using an Obsidian vault as input"
-authors = ["Luca <luca@facciocose.it>"]
+authors = ["Luca <ldm.marra@gmail.com>"]
 license = "MIT"
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = "^3.10"
 
 [tool.poetry.dev-dependencies]
 
