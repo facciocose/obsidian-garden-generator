@@ -2,6 +2,7 @@ from __future__ import annotations
 from collections import defaultdict
 import markdown
 import re
+import time
 from os import path
 from jinja2 import Environment, PackageLoader 
 from slugify import slugify
@@ -43,6 +44,7 @@ class Page:
         self.html = ""
         self.links = set()
         self.backlinks = set()
+        self.mtime = None
         
     def __repr__(self) -> str:
         return self.name
@@ -61,16 +63,21 @@ class Page:
         return f"{self.name}.md"
 
     @property
+    def markdown_path(self) -> str:
+        return path.join(config["BASE_DIR"], self.markdown_name)
+
+    @property
     def html_name(self) -> str:
         filename = "index" if self.is_index else slugify(self.name)
         return f"{filename}.html"
     
     def parse(self):
-        with open(path.join(config["BASE_DIR"], self.markdown_name), 'r') as f:
+        with open(self.markdown_path, 'r') as f:
             self.markdown = f.read()
         self.links = {Page(link[0][:-1]) if link[0] else Page(link[1]) for link in re.findall(LINK_REGEX, self.markdown)}
         html = markdown.markdown(self.markdown, extensions=["codehilite", "fenced_code"])
         self.html = re.sub(LINK_REGEX, self._create_link, html)
+        self.mtime = time.strftime('%Y.%m.%d', time.localtime(path.getmtime(self.markdown_path)))
         self.compute_backlinks()
     
     @staticmethod
@@ -88,7 +95,7 @@ class Page:
 
     def save(self):
         template = env.get_template("index.html") 
-        content = template.render(content=self.html, backlinks=sorted(backlinks[self], key=lambda x: 0 if x.name == config["START_PAGE"] else 1))
+        content = template.render(content=self.html, mtime=self.mtime, backlinks=sorted(backlinks[self], key=lambda x: 0 if x.name == config["START_PAGE"] else 1))
         
         with open(path.join(config["OUTPUT_DIR"], self.html_name), 'w') as f:
             f.write(content)
