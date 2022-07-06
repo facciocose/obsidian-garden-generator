@@ -4,7 +4,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Faccio Cose</title>
+  {% if is_index %}
+  <title>My Website</title>
+  {% else %}
+  <title>{{ name }} - My Website</title>
+  {% endif %}
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.3/css/bulma.min.css">
 </head>
 
@@ -22,7 +26,7 @@
         <div class="column is-narrow" style="padding:0">
           <aside class="menu" style="position:sticky;top:0">
             <nav class="p-3">
-              <p class="menu-label">Riferimenti</p>
+              <p class="menu-label">Backlinks</p>
               <ul class="menu-list">
                 {% for page in backlinks %}
                 <li><a href="{{ page.html_name }}">{{ page.name }}</a></li>
@@ -38,7 +42,7 @@
   <footer class="footer">
     <div class="container is-max-desktop">
       <div class="content is-size-7">
-        Ultima modifica: {{ mtime }}
+        {{ mtime }}
       </div>
     </div>
   </footer>

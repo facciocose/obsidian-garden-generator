@@ -13,6 +13,3 @@ OUTPUT_DIR = output
 ```
 
 This config opens `home.md` file in the Obsidian vault and starts creating output files in `output` directory.
-
-## Todo
-- templates should be external from this project

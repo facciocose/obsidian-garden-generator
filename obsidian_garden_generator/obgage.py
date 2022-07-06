@@ -4,7 +4,7 @@ import markdown
 import re
 import time
 from os import path
-from jinja2 import Environment, PackageLoader 
+from jinja2 import Environment, FileSystemLoader
 from slugify import slugify
 from configparser import ConfigParser
 
@@ -22,11 +22,11 @@ def load_config():
     return config["DEFAULT"]
 
 
-env = Environment(
-    loader=PackageLoader("obsidian_garden_generator")
-)
-
 config = load_config()
+
+env = Environment(
+    loader=FileSystemLoader(config["TEMPLATES_DIR"])
+)
 
 
 class Page:
@@ -75,7 +75,7 @@ class Page:
         with open(self.markdown_path, 'r') as f:
             self.markdown = f.read()
         self.links = {Page(link[0][:-1]) if link[0] else Page(link[1]) for link in re.findall(LINK_REGEX, self.markdown)}
-        html = markdown.markdown(self.markdown, extensions=["codehilite", "fenced_code"])
+        html = markdown.markdown(self.markdown, extensions=["codehilite", "fenced_code", "tables"])
         self.html = re.sub(LINK_REGEX, self._create_link, html)
         self.mtime = time.strftime('%Y.%m.%d', time.localtime(path.getmtime(self.markdown_path)))
         self.compute_backlinks()
@@ -95,7 +95,13 @@ class Page:
 
     def save(self):
         template = env.get_template("index.html") 
-        content = template.render(content=self.html, mtime=self.mtime, backlinks=sorted(backlinks[self], key=lambda x: 0 if x.name == config["START_PAGE"] else 1))
+        content = template.render(
+            content=self.html,
+            mtime=self.mtime,
+            name=self.name,
+            is_index=self.is_index,
+            backlinks=sorted(backlinks[self], key=lambda x: 0 if x.is_index else 1)
+        )
         
         with open(path.join(config["OUTPUT_DIR"], self.html_name), 'w') as f:
             f.write(content)
