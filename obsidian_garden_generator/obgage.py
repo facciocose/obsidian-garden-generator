@@ -7,6 +7,7 @@ from os import path
 from jinja2 import Environment, FileSystemLoader
 from slugify import slugify
 from configparser import ConfigParser
+import sass
 
 
 LINK_REGEX = r'\[\[([^\]\[]+\|)?([^\]\[]+)\]\]'
@@ -121,6 +122,7 @@ def create_page(name, is_index=False):
 
 
 def run():
+    sass.compile(dirname=(path.join(config["STATIC_DIR"], "sass"), path.join(config["OUTPUT_DIR"], "css")), output_style='compressed')
     create_page(config["START_PAGE"], is_index=True)
     
     for page in pages:

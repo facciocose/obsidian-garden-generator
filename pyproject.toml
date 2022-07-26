@@ -13,6 +13,7 @@ python = "^3.10"
 Markdown = "^3.3.6"
 python-slugify = "^6.1.2"
 Jinja2 = "^3.1.1"
+libsass = "^0.21.0"
 
 [tool.poetry.dev-dependencies]
 black = {version = "^22.3.0", allow-prereleases = true}
