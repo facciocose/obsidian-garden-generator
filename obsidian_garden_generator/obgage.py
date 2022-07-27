@@ -1,16 +1,22 @@
 from __future__ import annotations
-from collections import defaultdict
-import markdown
+
+import http.server
 import re
 import time
+from collections import defaultdict
+from concurrent.futures import thread
+from configparser import ConfigParser
 from os import path
+from threading import Thread
+
+import markdown
+import sass
 from jinja2 import Environment, FileSystemLoader
 from slugify import slugify
-from configparser import ConfigParser
-import sass
+from watchdog.events import FileSystemEventHandler
+from watchdog.observers import Observer
 
-
-LINK_REGEX = r'\[\[([^\]\[]+\|)?([^\]\[]+)\]\]'
+LINK_REGEX = r"\[\[([^\]\[]+\|)?([^\]\[]+)\]\]"
 
 
 def load_config():
@@ -25,9 +31,7 @@ def load_config():
 
 config = load_config()
 
-env = Environment(
-    loader=FileSystemLoader(config["TEMPLATES_DIR"])
-)
+env = Environment(loader=FileSystemLoader(config["TEMPLATES_DIR"]))
 
 
 class Page:
@@ -37,7 +41,7 @@ class Page:
     html: str
     links: set[Page]
     backlinks: set[Page]
-    
+
     def __init__(self, name, is_index=False) -> None:
         self.name = name
         self.is_index = is_index
@@ -46,10 +50,10 @@ class Page:
         self.links = set()
         self.backlinks = set()
         self.mtime = None
-        
+
     def __repr__(self) -> str:
         return self.name
-    
+
     def __str__(self) -> str:
         return self.name
 
@@ -58,7 +62,7 @@ class Page:
 
     def __eq__(self, __o: object) -> bool:
         return self.name == __o.name
-    
+
     @property
     def markdown_name(self) -> str:
         return f"{self.name}.md"
@@ -71,23 +75,30 @@ class Page:
     def html_name(self) -> str:
         filename = "index" if self.is_index else slugify(self.name)
         return f"{filename}.html"
-    
+
     def parse(self):
-        with open(self.markdown_path, 'r') as f:
+        with open(self.markdown_path, "r") as f:
             self.markdown = f.read()
-        self.links = {Page(link[0][:-1]) if link[0] else Page(link[1]) for link in re.findall(LINK_REGEX, self.markdown)}
-        html = markdown.markdown(self.markdown, extensions=["codehilite", "fenced_code", "tables"])
+        self.links = {
+            Page(link[0][:-1]) if link[0] else Page(link[1])
+            for link in re.findall(LINK_REGEX, self.markdown)
+        }
+        html = markdown.markdown(
+            self.markdown, extensions=["codehilite", "fenced_code", "tables"]
+        )
         self.html = re.sub(LINK_REGEX, self._create_link, html)
-        self.mtime = time.strftime('%Y.%m.%d', time.localtime(path.getmtime(self.markdown_path)))
+        self.mtime = time.strftime(
+            "%Y.%m.%d", time.localtime(path.getmtime(self.markdown_path))
+        )
         self.compute_backlinks()
-    
+
     @staticmethod
     def _create_link(match) -> str:
         name = match.group(2)
         if link := match.group(1):
-            filename = slugify(link[:-1]) + '.html'
+            filename = slugify(link[:-1]) + ".html"
         else:
-            filename = slugify(name) + '.html'
+            filename = slugify(name) + ".html"
         return f'<a href="{filename}">{name}</a>'
 
     def compute_backlinks(self):
@@ -95,16 +106,16 @@ class Page:
             backlinks[link].add(self)
 
     def save(self):
-        template = env.get_template("index.html") 
+        template = env.get_template("index.html")
         content = template.render(
             content=self.html,
             mtime=self.mtime,
             name=self.name,
             is_index=self.is_index,
-            backlinks=sorted(backlinks[self], key=lambda x: 0 if x.is_index else 1)
+            backlinks=sorted(backlinks[self], key=lambda x: 0 if x.is_index else 1),
         )
-        
-        with open(path.join(config["OUTPUT_DIR"], self.html_name), 'w') as f:
+
+        with open(path.join(config["OUTPUT_DIR"], self.html_name), "w") as f:
             f.write(content)
 
 
@@ -121,9 +132,47 @@ def create_page(name, is_index=False):
         create_page(link.name)
 
 
+class FileEventHandler(FileSystemEventHandler):
+    def process_site(self):
+        sass.compile(
+            dirname=(
+                path.join(config["STATIC_DIR"], "sass"),
+                path.join(config["OUTPUT_DIR"], "css"),
+            ),
+            output_style="compressed",
+        )
+        create_page(config["START_PAGE"], is_index=True)
+
+        for page in pages:
+            page.save()
+
+    def on_any_event(self, event):
+        if event.is_directory:
+            self.process_site()
+
+
+class HttpRequestHandler(http.server.SimpleHTTPRequestHandler):
+    def end_headers(self):
+        self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+        self.send_header("Pragma", "no-cache")
+        self.send_header("Expires", "0")
+        super().end_headers()
+
+
 def run():
-    sass.compile(dirname=(path.join(config["STATIC_DIR"], "sass"), path.join(config["OUTPUT_DIR"], "css")), output_style='compressed')
-    create_page(config["START_PAGE"], is_index=True)
-    
-    for page in pages:
-        page.save()
+    observer = Observer()
+    observer.schedule(FileEventHandler(), ".", recursive=True)
+    observer.start()
+
+    httpd = http.server.HTTPServer(("", 8000), HttpRequestHandler)
+    httpd_thread = Thread(target=httpd.serve_forever)
+    httpd_thread.daemon = True
+    httpd_thread.start()
+
+    try:
+        while observer.is_alive() or httpd_thread.is_alive():
+            time.sleep(1)
+    except KeyboardInterrupt:
+        observer.stop()
+
+    observer.join()
