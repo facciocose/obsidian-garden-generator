@@ -131,27 +131,35 @@ def create_page(name, is_index=False):
     for link in page.links:
         create_page(link.name)
 
+def process_site():
+    sass.compile(
+        dirname=(
+            path.join(config["STATIC_DIR"], "sass"),
+            path.join(config["OUTPUT_DIR"], "css"),
+        ),
+        output_style="compressed",
+    )
+    create_page(config["START_PAGE"], is_index=True)
 
-class FileEventHandler(FileSystemEventHandler):
-    def process_site(self):
-        sass.compile(
-            dirname=(
-                path.join(config["STATIC_DIR"], "sass"),
-                path.join(config["OUTPUT_DIR"], "css"),
-            ),
-            output_style="compressed",
-        )
-        create_page(config["START_PAGE"], is_index=True)
+    for page in pages:
+        page.save()
 
-        for page in pages:
-            page.save()
+class TemplateUpdateHandler(FileSystemEventHandler):
+    VALID_PATHS = [
+        path.abspath(config["TEMPLATES_DIR"]),
+        path.abspath(path.join(config["STATIC_DIR"], "sass")),
+    ]
 
     def on_any_event(self, event):
-        if event.is_directory:
-            self.process_site()
+        if event.is_directory and path.abspath(event.src_path) in self.VALID_PATHS:
+            process_site()
 
 
 class HttpRequestHandler(http.server.SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        kwargs["directory"] = config["OUTPUT_DIR"]
+        super().__init__(*args, **kwargs)
+
     def end_headers(self):
         self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
         self.send_header("Pragma", "no-cache")
@@ -161,8 +169,9 @@ class HttpRequestHandler(http.server.SimpleHTTPRequestHandler):
 
 def run():
     observer = Observer()
-    observer.schedule(FileEventHandler(), ".", recursive=True)
+    observer.schedule(TemplateUpdateHandler(), ".", recursive=True)
     observer.start()
+    process_site()
 
     httpd = http.server.HTTPServer(("", 8000), HttpRequestHandler)
     httpd_thread = Thread(target=httpd.serve_forever)
